@@ -80,18 +80,3 @@ CREATE TRIGGER trigger_set_completed_at
   BEFORE UPDATE ON tasks
   FOR EACH ROW 
   EXECUTE FUNCTION set_completed_at();
-
--- Additional RLS policies to ensure proper deletion
--- Allow task creators to delete their own tasks
-CREATE POLICY IF NOT EXISTS "Users can delete their own tasks" ON tasks
-  FOR DELETE USING (auth.jwt() ->> 'email' = created_by_email);
-
--- Allow users to delete comments on tasks they created
-CREATE POLICY IF NOT EXISTS "Task creators can delete comments on their tasks" ON comments
-  FOR DELETE USING (
-    EXISTS (
-      SELECT 1 FROM tasks 
-      WHERE tasks.id = comments.task_id 
-      AND tasks.created_by_email = auth.jwt() ->> 'email'
-    )
-  );

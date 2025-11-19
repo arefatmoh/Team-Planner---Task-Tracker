@@ -1,173 +1,184 @@
-/**
- * Telegram Notification Helper
- * 
- * This module provides functions to send notifications to the Telegram bot
- * via the webhook API when tasks are created, updated, or commented on.
- */
+// Telegram Bot Notifications for UmraGO Launching
 
-// Configuration - Update these with your actual values
-// If VITE_WEBHOOK_API_URL is not set, use current origin (for Vercel deployment)
-const WEBHOOK_API_URL = import.meta.env?.VITE_WEBHOOK_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'https://your-webhook-api.railway.app')
-const WEBHOOK_SECRET = import.meta.env?.VITE_WEBHOOK_SECRET || 'your-webhook-secret'
+// Get config from environment variables (set these in Vercel)
+const TELEGRAM_BOT_TOKEN = import.meta.env?.VITE_TELEGRAM_BOT_TOKEN || ''
+const TELEGRAM_CHAT_ID = import.meta.env?.VITE_TELEGRAM_CHAT_ID || ''
 
-// Enable/disable notifications (can be toggled via environment variable)
-const NOTIFICATIONS_ENABLED = import.meta.env?.VITE_TELEGRAM_NOTIFICATIONS_ENABLED !== 'false'
+// Log configuration status on load
+console.log('🤖 Telegram Bot Configuration Status:')
+console.log('  - Bot Token:', TELEGRAM_BOT_TOKEN ? `✅ Found (${TELEGRAM_BOT_TOKEN.substring(0, 10)}...)` : '❌ Not configured')
+console.log('  - Chat ID:', TELEGRAM_CHAT_ID ? `✅ Found (${TELEGRAM_CHAT_ID})` : '❌ Not configured')
 
-interface TaskData {
-  id: string
-  title: string
-  description: string
-  assigned_to: string
-  assigned_to_email: string
-  deadline: string
-  priority: 'low' | 'medium' | 'high'
-  status: 'pending' | 'in-progress' | 'completed'
-  created_by: string
-  created_by_email: string
-  created_at: string
+// Check if Telegram is enabled (both token and chat ID must be set)
+const isTelegramEnabled = () => {
+  return Boolean(TELEGRAM_BOT_TOKEN && TELEGRAM_CHAT_ID)
 }
 
-interface CommentData {
-  id: string
-  task_id: string
-  user_name: string
-  user_email: string
-  comment_text: string
-  created_at: string
-}
-
-interface BroadcastData {
-  message: string
-  sender_name: string
-  sender_email: string
-}
-
-/**
- * Send a notification to the Telegram webhook API
- */
-async function sendNotification(endpoint: string, data: any): Promise<boolean> {
-  if (!NOTIFICATIONS_ENABLED) {
-    console.log('Telegram notifications are disabled')
+// Send a message to Telegram
+const sendTelegramMessage = async (message: string) => {
+  if (!isTelegramEnabled()) {
+    console.log('⚠️ Telegram notification skipped: Not configured')
+    console.log('   To enable: Add VITE_TELEGRAM_BOT_TOKEN and VITE_TELEGRAM_CHAT_ID in Vercel')
     return false
   }
 
+  console.log('📤 Sending Telegram notification...')
+  console.log('   Message preview:', message.substring(0, 50) + '...')
+
   try {
-    // Construct API URL
-    // If WEBHOOK_API_URL is set and different from current origin, use external API
-    // Otherwise, use relative path for Vercel serverless functions
-    const isExternalApi = WEBHOOK_API_URL && 
-      typeof window !== 'undefined' && 
-      WEBHOOK_API_URL !== window.location.origin &&
-      !WEBHOOK_API_URL.startsWith('/')
-    
-    const apiPath = isExternalApi
-      ? `${WEBHOOK_API_URL}/webhook/${endpoint}`
-      : `/api/telegram-webhook/${endpoint}`
-    
-    const response = await fetch(apiPath, {
+    const url = `https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage`
+    const response = await fetch(url, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'X-Webhook-Secret': WEBHOOK_SECRET,
-      },
-      body: JSON.stringify(data),
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        chat_id: TELEGRAM_CHAT_ID,
+        text: message,
+        parse_mode: 'HTML',
+      }),
     })
 
     if (!response.ok) {
-      const error = await response.json()
-      console.error('Telegram notification failed:', error)
+      const errorText = await response.text()
+      console.error('❌ Telegram API error:')
+      console.error('   Status:', response.status)
+      console.error('   Response:', errorText)
       return false
     }
 
-    const result = await response.json()
-    console.log('Telegram notification sent:', result)
+    console.log('✅ Telegram notification sent successfully!')
     return true
   } catch (error) {
-    console.error('Error sending Telegram notification:', error)
+    console.error('❌ Failed to send Telegram message:')
+    console.error('   Error:', error)
     return false
   }
 }
 
-/**
- * Notify about a newly created task
- */
-export async function notifyTaskCreated(task: TaskData): Promise<boolean> {
-  return sendNotification('task-created', { record: task })
-}
+// Notify when a new task is created
+export const notifyTaskCreated = async (tasksData: Array<{
+  title: string
+  assigned_to: string
+  deadline: string
+  priority: string
+  created_by: string
+}> | {
+  title: string
+  assigned_to: string
+  deadline: string
+  priority: string
+  created_by: string
+}) => {
+  console.log('🔔 notifyTaskCreated called')
+  
+  // Handle both single task and array of tasks
+  const tasks = Array.isArray(tasksData) ? tasksData : [tasksData]
+  
+  console.log(`   Notifying for ${tasks.length} task(s)`)
+  
+  // Send notification for each task
+  for (const task of tasks) {
+    console.log(`   Processing task: "${task.title}"`)
+    const message = `
+🆕 <b>New Task Created</b>
 
-/**
- * Notify about a task update
- */
-export async function notifyTaskUpdated(
-  task: TaskData,
-  oldTask?: Partial<TaskData>
-): Promise<boolean> {
-  return sendNotification('task-updated', {
-    record: task,
-    old_record: oldTask,
-  })
-}
+📋 <b>Title:</b> ${task.title}
+👤 <b>Assigned to:</b> ${task.assigned_to || 'Unassigned'}
+📅 <b>Deadline:</b> ${task.deadline || 'No deadline'}
+⚡ <b>Priority:</b> ${task.priority}
+✍️ <b>Created by:</b> ${task.created_by}
 
-/**
- * Notify about a task completion
- */
-export async function notifyTaskCompleted(task: TaskData): Promise<boolean> {
-  if (task.status !== 'completed') {
-    console.warn('Task is not marked as completed')
-    return false
+#UmraGO #NewTask
+    `.trim()
+
+    await sendTelegramMessage(message)
   }
-  return sendNotification('task-completed', { record: task })
+  
+  return true
 }
 
-/**
- * Notify about a new comment
- */
-export async function notifyCommentAdded(comment: CommentData): Promise<boolean> {
-  return sendNotification('comment-added', { record: comment })
+// Notify when a task status changes
+export const notifyTaskStatusChanged = async (taskData: {
+  title: string
+  oldStatus: string
+  newStatus: string
+  changedBy: string
+}) => {
+  console.log('🔔 notifyTaskStatusChanged called')
+  console.log(`   Task: "${taskData.title}" (${taskData.oldStatus} → ${taskData.newStatus})`)
+  
+  const message = `
+🔄 <b>Task Status Updated</b>
+
+📋 <b>Task:</b> ${taskData.title}
+📊 <b>Status:</b> ${taskData.oldStatus} → ${taskData.newStatus}
+👤 <b>Changed by:</b> ${taskData.changedBy}
+
+#UmraGO #StatusUpdate
+  `.trim()
+
+  return sendTelegramMessage(message)
 }
 
-/**
- * Send a broadcast message to all groups
- */
-export async function sendBroadcast(data: BroadcastData): Promise<boolean> {
-  return sendNotification('broadcast', data)
+// Notify when a task is completed
+export const notifyTaskCompleted = async (taskData: {
+  title: string
+  completedBy: string
+}) => {
+  console.log('🔔 notifyTaskCompleted called')
+  console.log(`   Task: "${taskData.title}" by ${taskData.completedBy}`)
+  
+  const message = `
+✅ <b>Task Completed!</b>
+
+📋 <b>Task:</b> ${taskData.title}
+👤 <b>Completed by:</b> ${taskData.completedBy}
+
+#UmraGO #TaskCompleted
+  `.trim()
+
+  return sendTelegramMessage(message)
 }
 
-/**
- * Check the health of the webhook API
- */
-export async function checkWebhookHealth(): Promise<boolean> {
-  if (!NOTIFICATIONS_ENABLED) {
-    return false
-  }
+// Notify when a new comment is added
+export const notifyNewComment = async (commentData: {
+  taskTitle: string
+  commentText: string
+  userName: string
+}) => {
+  console.log('🔔 notifyNewComment called')
+  console.log(`   Task: "${commentData.taskTitle}" by ${commentData.userName}`)
+  
+  const message = `
+💬 <b>New Comment</b>
 
-  try {
-    // Construct health check URL (same logic as sendNotification)
-    const isExternalApi = WEBHOOK_API_URL && 
-      typeof window !== 'undefined' && 
-      WEBHOOK_API_URL !== window.location.origin &&
-      !WEBHOOK_API_URL.startsWith('/')
-    
-    const healthPath = isExternalApi
-      ? `${WEBHOOK_API_URL}/health`
-      : `/api/telegram-webhook/health`
-    
-    const response = await fetch(healthPath)
-    return response.ok
-  } catch (error) {
-    console.error('Webhook API health check failed:', error)
-    return false
-  }
+📋 <b>Task:</b> ${commentData.taskTitle}
+👤 <b>From:</b> ${commentData.userName}
+💭 <b>Comment:</b> ${commentData.commentText}
+
+#UmraGO #NewComment
+  `.trim()
+
+  return sendTelegramMessage(message)
 }
 
-/**
- * Utility to check if Telegram notifications are configured
- */
-export function isTelegramConfigured(): boolean {
-  return (
-    NOTIFICATIONS_ENABLED &&
-    WEBHOOK_API_URL !== 'https://your-webhook-api.railway.app' &&
-    WEBHOOK_SECRET !== 'your-webhook-secret' &&
-    WEBHOOK_SECRET !== ''
-  )
+// Notify when a task is assigned
+export const notifyTaskAssigned = async (taskData: {
+  title: string
+  assignedTo: string
+  assignedBy: string
+}) => {
+  console.log('🔔 notifyTaskAssigned called')
+  console.log(`   Task: "${taskData.title}" assigned to ${taskData.assignedTo}`)
+  
+  const message = `
+👥 <b>Task Assigned</b>
+
+📋 <b>Task:</b> ${taskData.title}
+👤 <b>Assigned to:</b> ${taskData.assignedTo}
+✍️ <b>By:</b> ${taskData.assignedBy}
+
+#UmraGO #TaskAssigned
+  `.trim()
+
+  return sendTelegramMessage(message)
 }

@@ -104,42 +104,34 @@ export function Dashboard({ onAddTask, onViewTask, showMyTasks = false, onViewAn
   const handleDeleteTask = async (e: React.MouseEvent, taskId: string) => {
     e.stopPropagation()
 
-    try {
-      // First, delete all comments associated with the task
-      const { error: commentsError } = await supabase
-        .from('comments')
-        .delete()
-        .eq('task_id', taskId)
+    if (!confirm('Are you sure you want to delete this task?')) {
+      return
+    }
 
+    try {
+      // Delete comments first
+      const { error: commentsError } = await supabase.from('comments').delete().eq('task_id', taskId)
+      
       if (commentsError) {
         console.error('Error deleting comments:', commentsError)
         throw commentsError
       }
       
-      // Then delete the task itself
-      const { error: taskError, data } = await supabase
-        .from('tasks')
-        .delete()
-        .eq('id', taskId)
-        .select()
+      // Then delete the task
+      const { error: taskError } = await supabase.from('tasks').delete().eq('id', taskId)
 
       if (taskError) {
         console.error('Error deleting task:', taskError)
         throw taskError
       }
 
-      // Check if task was actually deleted
-      if (!data || data.length === 0) {
-        throw new Error('Task not found or could not be deleted')
-      }
-
       toast.success('Task deleted successfully')
       
-      // Remove task from local state immediately for instant feedback
-      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId))
+      // Reload tasks
+      await loadTasks()
     } catch (error) {
       console.error('Error deleting task:', error)
-      toast.error('Failed to delete task. Please try again.')
+      toast.error('Failed to delete task')
     }
   }
 

@@ -85,19 +85,12 @@ export function AddTaskPage({ onBack }: AddTaskPageProps) {
         created_by_email: user?.email || '',
       }))
 
-      const { error: insertError, data: createdTasks } = await supabase
-        .from('tasks')
-        .insert(tasksToCreate)
-        .select()
+      const { error: insertError } = await supabase.from('tasks').insert(tasksToCreate)
 
       if (insertError) throw insertError
 
-      // Notify via Telegram for each created task
-      if (createdTasks && createdTasks.length > 0) {
-        for (const task of createdTasks) {
-          await notifyTaskCreated(task)
-        }
-      }
+      // Notify via Telegram
+      await notifyTaskCreated(tasksToCreate)
 
       onBack()
     } catch (err: any) {

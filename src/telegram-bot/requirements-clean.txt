@@ -1,4 +1,4 @@
-# UmraGO Telegram Bot Dependencies
+# UmraGO Telegram Bot - Clean Dependencies
 # Minimal, tested, and compatible versions
 
 # Telegram Bot Framework (stable version)
@@ -11,4 +11,5 @@ supabase==2.3.0
 python-dotenv>=1.0.0
 
 # Note: httpx is automatically installed as a dependency of supabase
-# No need to specify it separately to avoid version conflicts
+# No need to specify it separately
+

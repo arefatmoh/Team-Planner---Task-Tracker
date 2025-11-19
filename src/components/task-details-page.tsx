@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { ArrowLeft, MessageCircle, Calendar, User, AlertCircle, Send } from 'lucide-react'
 import { supabase } from '../lib/supabase'
 import { useAuth } from '../lib/auth-context'
-import { notifyTaskCompleted, notifyCommentAdded } from '../lib/telegram-notifications'
+import { notifyTaskCompleted, notifyTaskStatusChanged, notifyNewComment } from '../lib/telegram-notifications'
 import { Button } from './ui/button'
 import { Badge } from './ui/badge'
 import { Checkbox } from './ui/checkbox'
@@ -118,6 +118,21 @@ export function TaskDetailsPage({ task, onBack, onViewComments }: TaskDetailsPag
       if (error) throw error
       
       toast.success('Task status updated')
+      
+      // Notify via Telegram
+      if (newStatus === 'completed') {
+        notifyTaskCompleted({
+          title: currentTask.title,
+          completedBy: userName,
+        })
+      } else {
+        notifyTaskStatusChanged({
+          title: currentTask.title,
+          oldStatus: currentTask.status,
+          newStatus: newStatus,
+          changedBy: userName,
+        })
+      }
     } catch (error) {
       console.error('Error updating status:', error)
       toast.error('Failed to update status')
@@ -156,9 +171,12 @@ export function TaskDetailsPage({ task, onBack, onViewComments }: TaskDetailsPag
       
       toast.success(checked ? 'Task marked as completed' : 'Task marked as incomplete')
       
-      // Send Telegram notification when task is completed
+      // Notify via Telegram
       if (checked) {
-        await notifyTaskCompleted({ ...currentTask, status: 'completed' })
+        notifyTaskCompleted({
+          title: currentTask.title,
+          completedBy: userName,
+        })
       }
     } catch (error) {
       console.error('Error updating status:', error)
@@ -174,18 +192,12 @@ export function TaskDetailsPage({ task, onBack, onViewComments }: TaskDetailsPag
 
     setSendingComment(true)
     try {
-      const commentData = {
+      const { error } = await supabase.from('comments').insert({
         task_id: task.id,
         user_name: userName,
         user_email: user?.email || '',
         comment_text: newComment.trim(),
-      }
-      
-      const { error, data: insertedComment } = await supabase
-        .from('comments')
-        .insert(commentData)
-        .select()
-        .single()
+      })
 
       if (error) throw error
 
@@ -195,10 +207,12 @@ export function TaskDetailsPage({ task, onBack, onViewComments }: TaskDetailsPag
       // Reload comments to show the new one
       await loadComments()
       
-      // Send Telegram notification
-      if (insertedComment) {
-        await notifyCommentAdded(insertedComment)
-      }
+      // Notify via Telegram
+      notifyNewComment({
+        taskTitle: currentTask.title,
+        commentText: newComment.trim(),
+        userName: userName,
+      })
     } catch (error) {
       console.error('Error adding comment:', error)
       toast.error('Failed to add comment')
