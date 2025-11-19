@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { ArrowLeft, Upload, X, CalendarIcon, Plus } from 'lucide-react'
 import { useAuth } from '../lib/auth-context'
 import { supabase } from '../lib/supabase'
+import { notifyTaskCreated } from '../lib/telegram-notifications'
 import { Button } from './ui/button'
 import { Input } from './ui/input'
 import { Label } from './ui/label'
@@ -84,9 +85,19 @@ export function AddTaskPage({ onBack }: AddTaskPageProps) {
         created_by_email: user?.email || '',
       }))
 
-      const { error: insertError } = await supabase.from('tasks').insert(tasksToCreate)
+      const { error: insertError, data: createdTasks } = await supabase
+        .from('tasks')
+        .insert(tasksToCreate)
+        .select()
 
       if (insertError) throw insertError
+
+      // Notify via Telegram for each created task
+      if (createdTasks && createdTasks.length > 0) {
+        for (const task of createdTasks) {
+          await notifyTaskCreated(task)
+        }
+      }
 
       onBack()
     } catch (err: any) {

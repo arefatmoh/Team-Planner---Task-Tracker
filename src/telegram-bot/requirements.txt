@@ -1,0 +1,22 @@
+# UmraGO Telegram Bot Dependencies
+
+# Telegram Bot Framework
+python-telegram-bot==20.7
+
+# Supabase Python Client
+supabase==2.3.0
+
+# Flask for Webhook API
+Flask==3.0.0
+flask-cors==4.0.0
+
+# HTTP Requests
+requests==2.31.0
+
+# Scheduling (for deadline reminders)
+schedule==1.2.0
+
+# Environment variables
+python-dotenv==1.0.0
+
+# Note: asyncio and logging are built-in Python modules and don't need to be installed

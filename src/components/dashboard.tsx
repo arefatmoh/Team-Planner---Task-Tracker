@@ -105,21 +105,41 @@ export function Dashboard({ onAddTask, onViewTask, showMyTasks = false, onViewAn
     e.stopPropagation()
 
     try {
-      // Delete comments first
-      await supabase.from('comments').delete().eq('task_id', taskId)
-      
-      // Then delete the task
-      const { error } = await supabase.from('tasks').delete().eq('id', taskId)
+      // First, delete all comments associated with the task
+      const { error: commentsError } = await supabase
+        .from('comments')
+        .delete()
+        .eq('task_id', taskId)
 
-      if (error) throw error
+      if (commentsError) {
+        console.error('Error deleting comments:', commentsError)
+        throw commentsError
+      }
+      
+      // Then delete the task itself
+      const { error: taskError, data } = await supabase
+        .from('tasks')
+        .delete()
+        .eq('id', taskId)
+        .select()
+
+      if (taskError) {
+        console.error('Error deleting task:', taskError)
+        throw taskError
+      }
+
+      // Check if task was actually deleted
+      if (!data || data.length === 0) {
+        throw new Error('Task not found or could not be deleted')
+      }
 
       toast.success('Task deleted successfully')
       
-      // Reload tasks
-      await loadTasks()
+      // Remove task from local state immediately for instant feedback
+      setTasks(prevTasks => prevTasks.filter(task => task.id !== taskId))
     } catch (error) {
       console.error('Error deleting task:', error)
-      toast.error('Failed to delete task')
+      toast.error('Failed to delete task. Please try again.')
     }
   }
 
